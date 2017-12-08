@@ -246,6 +246,15 @@ v_data_xml <- lapply(v_path_xmls,
 v_data_xml_df <- v_data_xml %>% 
   do.call("rbind", .)
 
+
+v_data_xml_df_1doc_per_doc <- v_data_xml_df %>%
+  select(doc, role, text) %>%
+  filter(role == "body-text") %>% 
+  group_by(doc) %>%
+  mutate(text = paste(text, collapse="") %>%
+  ungroup()
+
+
 #---- Topic modelling --------------------------------------------------------------
 
 
