@@ -8,6 +8,7 @@ u_path_xml <- "data/xml"
 library(tidyverse)
 library(pdftools)
 library(xml2)
+library(scientometrix)
 
 # load functions
 source("functions/pdf_functions.R")
@@ -17,6 +18,7 @@ v_path_pdfs <- list.files(u_path_pdf, full.names = TRUE)
 v_path_xmls <- list.files(u_path_xml, full.names = TRUE)
 
 #==== PROCESS DATA =================================================================
+#---- Get pdf content and structure ------------------------------------------------
 v_pdf_summary <- lapply(v_path_pdfs,
        function(x) {
          
@@ -84,6 +86,19 @@ v_data_xml <- lapply(v_path_xmls,
          print(x)
          
          #---- local function --------
+         get_mcatt_sectionheader <- function(i_df, i_attr, i_levels) {
+           tmp <- i_df %>% 
+             filter(grepl("^[1-9]{1}(\\.{1}[1-9]{1}){,2}\\s{1}(\\w){1,}", text) & (maxy-miny) <= 20) %>% 
+             filter(row_number() <= 5) %>% 
+             select_(i_attr) %>% 
+             group_by_(i_attr) %>% 
+             summarise(count=n()) %>% 
+             ungroup() %>% 
+             arrange(desc(count)) %>% 
+             filter(row_number() <= i_levels)
+           
+           return(tmp[[i_attr]])
+         }
          get_mcatt_bodytext <- function(i_df, i_attr) {
            tmp <- i_df %>% 
              arrange(desc(ncar)) %>% 
@@ -107,6 +122,7 @@ v_data_xml <- lapply(v_path_xmls,
                                                   @role='table-caption']") 
          
          if (length(tmp) != 0) {
+           print("  > Processing file...")
            page <- xml_attr(tmp, "page")
            minx <- xml_attr(tmp, "minX")
            miny <- xml_attr(tmp, "minY")
@@ -125,18 +141,19 @@ v_data_xml <- lapply(v_path_xmls,
            text <- xml_text(tmp)
            
            df <- data.frame(
+             id   = 1:length(text),
              doc  = x,
-             page = page,
-             minx = minx,
-             miny = miny,
-             maxx = maxx,
-             maxy = maxy,
+             page = as.numeric(page),
+             minx = as.numeric(minx),
+             miny = as.numeric(miny),
+             maxx = as.numeric(maxx),
+             maxy = as.numeric(maxy),
              mcfo = mcfo,
-             mcfs = mcfs,
+             mcfs = as.numeric(mcfs),
              sfon = sfon,
-             sfos = sfos,
+             sfos = as.numeric(sfos),
              efon = efon,
-             efos = efos,
+             efos = as.numeric(efos),
              mcco = mcco,
              scol = scol,
              ecol = ecol,
@@ -146,20 +163,58 @@ v_data_xml <- lapply(v_path_xmls,
              stringsAsFactors = FALSE
            )
            
-           # Get most common font, font-size and colour used for body text...
+           # Infer most common font, font-size and colour used for section headers
+           print("  > Infer most common font for section headers")
+           section_header_mcfont     <- get_mcatt_sectionheader(df, "mcfo", 2)
+           section_header_mcfontsize <- as.numeric(get_mcatt_sectionheader(df, "mcfs", 2))
+           section_header_mccolour   <- get_mcatt_sectionheader(df, "mcco", 1)
+           
+           # Infer most common font, font-size and colour used for body text
+           print("  > Infer most common font for body text")
            body_text_mcfont     <- get_mcatt_bodytext(df, "mcfo")
-           body_text_mcfontsize <- get_mcatt_bodytext(df, "mcfs")
+           body_text_mcfontsize <- as.numeric(get_mcatt_bodytext(df, "mcfs"))
            body_text_mccolour   <- get_mcatt_bodytext(df, "mcco")
            
-           # ... filter out rows that do not have those common properties
+           # Infer pdf content and structure (section headers and body text) by filtering out rows that do not match those common properties
+           print("  > Infer pdf structure and content")
+           df <- rbind(
+             df %>% 
+               filter(grepl("^[1-9]{1}(\\.{1}[1-9]{1}){,2}\\s{1}(\\w){1,}", text) & (maxy-miny) <= 20) %>% 
+               filter(mcfo %in% section_header_mcfont, mcfs %in% section_header_mcfontsize, mcco %in% section_header_mccolour) %>% 
+               mutate(role="section-heading"),
+             df %>% 
+               filter(!grepl("^[1-9]{1}(\\.{1}[1-9]{1}){,2}\\s{1}(\\w){1,}", text) & (maxy-miny) > 20) %>% 
+               filter(mcfo == body_text_mcfont, mcfs == body_text_mcfontsize, mcco == body_text_mccolour) %>% 
+               mutate(role = "body-text")) %>% 
+             arrange(id) %>% 
+             mutate(role=ifelse(grepl("^abstract.*", tolower(text)), "abstract", role))
+           
+           # Allocate sections to rows #1
+           print("  > Allocate sections #1")
            df <- df %>% 
-             filter(mcfo == body_text_mcfont, mcfs == body_text_mcfontsize, mcco == body_text_mccolour)
+             mutate(section = ifelse(role == "abstract", "abstract", "")) %>% 
+             mutate(section = ifelse(role == "section-heading", text, ""))
+           
+           # Allocate sections to rows #2
+           print("  > Allocate sections #2")
+           df$section[which(df$role == "body-text")] <- sapply((df %>% 
+                                                                  select(id, role) %>% 
+                                                                  filter(role == "body-text"))$id, 
+                                                               function(y) {
+                                                                 (df %>% 
+                                                                    select(id, role, text) %>% 
+                                                                    filter(role == "section-heading")
+                                                                  )$text[max(which((y - (df %>% 
+                                                                                           select(id, role) %>% 
+                                                                                           filter(role == "section-heading"))$id) > 0))]})
+             
            
            
            
          } else {
            print("===========> Skipping <==================================================================")
            df <- data.frame(
+             id   = 1,
              doc  = x,
              page = NA,
              minx = NA,
@@ -178,6 +233,7 @@ v_data_xml <- lapply(v_path_xmls,
              role = "",
              text = "",
              ncar = 0,
+             section = "",
              stringsAsFactors = FALSE
            )
          }
@@ -187,6 +243,10 @@ v_data_xml <- lapply(v_path_xmls,
          
        })
 
+v_data_xml_df <- v_data_xml %>% 
+  do.call("rbind", .)
+
+#---- Topic modelling --------------------------------------------------------------
 
 
 #==== PLOT DATA ====================================================================
