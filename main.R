@@ -5,10 +5,28 @@ u_path_xml <- "data/xml"
 
 #==== INITIALISE ===================================================================
 # load libraries
-library(tidyverse)
+library(devtools)
+library(bibliometrix)
+library(SnowballC)
+library(servr)
+library(httpuv)
+library(ggplot2)
+library(tm)
+#library(wordcloud)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(topicmodels)
+#library(igraph)
+library(jsonlite)
 library(pdftools)
+library(wordcloud)
+#library(text2vec)
+#library(NMF)
+library(LDAvis)
 library(xml2)
-library(scientometrix)
+
+library(scimetrix)
 
 # load functions
 source("functions/pdf_functions.R")
@@ -246,16 +264,89 @@ v_data_xml <- lapply(v_path_xmls,
 v_data_xml_df <- v_data_xml %>% 
   do.call("rbind", .)
 
+save(v_pdf_summary, v_data_xml, v_data_xml_df, file = "data/processedData.RData")
 
 v_data_xml_df_1doc_per_doc <- v_data_xml_df %>%
   select(doc, role, text) %>%
   filter(role == "body-text") %>% 
   group_by(doc) %>%
-  mutate(text = paste(text, collapse="") %>%
+  summarise(text = paste(text, collapse="")) %>%
   ungroup()
 
+v_data_xml_df_1doc_per_doc <- v_data_xml_df_1doc_per_doc %>%
+  mutate(text=tolower(text)) %>% 
+  mutate(text=gsub("", ""))
+  #mutate(text=iconv(text, to="utf8"))
 
 #---- Topic modelling --------------------------------------------------------------
+ignorewords = c("the", "with")
 
+# make a corpus
+#corpus <- corporate(v_data_xml_df_1doc_per_doc, col="text")
+ignoreWords <- c("the", "however", "this", "and")
+corpus <- tm::Corpus(tm::VectorSource(v_data_xml_df_1doc_per_doc$text)) %>% 
+  #tm::tm_map(tm::PlainTextDocument) %>% 
+  tm::tm_map(tm::removePunctuation) %>% 
+  tm::tm_map(tm::removeNumbers) %>% 
+  tm::tm_map(tm::removeWords, tm::stopwords()) %>% 
+  tm::tm_map(tm::removeWords, ignoreWords) %>% 
+  tm::tm_map(tm::stemDocument)
+#t <- iconv(t,to="utf-8-mac")
+
+# make a doc-term matrix and refresh the corpus to reflect any docs removed in the process
+dtm <- makeDTM(corpus,0.95,v_data_xml_df_1doc_per_doc$doc,0.01,0)
+
+rem         <- filter(v_data_xml_df_1doc_per_doc, doc %in% dtm$removed)
+docs_used    <- subset(v_data_xml_df_1doc_per_doc, !(doc %in% dtm$removed))
+corpus_used <- refresh_corp(dtm$dtm)
+
+# save data
+docs   <- docs_used
+corpus <- corpus_used
+save(docs,corpus,dtm,file="data/docs.RData")
+
+rm(docs_used,corpus_used,rem)
+
+SEED <- 2016
+
+system.time({
+  LDA_model = LDA(dtm$dtm,k=60, method="VEM",
+                   control=list(seed=SEED))
+})
+
+# saves the results into the working dir
+save(LDA_model, file="data/lda_model_60topics.RData")
+terms(LDA_model, 3)
+terms(LDA_model, 10) %>% as.data.frame() %>% write.csv2(file = "output/LDAmodel_60topics_crosssection.csv")
+
+visualise(LDA_model, corpus, dtm$dtm, dir="output/LDA_model")
+
+k_tw = 1
+VERBOSE=TRUE
+
+# window topic modeling
+wtm <- list()
+wtm[[k_tw]] <- list()
+
+# Select documents
+wtm[[k_tw]]$data <- v_data_xml_df_1doc_per_doc #%>% filter(PY %in% as.numeric(tw[[k_tw]]))
+
+cat(paste0("Number of documents in current time-window: ", nrow(wtm[[k_tw]]$data), "\n"))
+
+# Generator iterator
+wtm[[k_tw]]$it <- get_tokensIterator(wtm[[k_tw]]$data, ignorewords, verbose=VERBOSE)
+
+# Create vocabulary
+wtm[[k_tw]]$vocab <- create_vocab(wtm[[k_tw]]$it, term_count_min = 5L, verbose=VERBOSE)
+
+# Create Document-Term Matrix
+wtm[[k_tw]]$dtm <- generate_dtm(wtm[[k_tw]]$vocab, wtm[[k_tw]]$it, wtm[[k_tw]]$data, verbose=VERBOSE)
+
+# Perform NMF to get topics
+tm_nmf <- nmf(as.matrix(wtm[[k_tw]]$dtm), rank = 50, seed="nndsvd")
+
+tm_lda <- LDA$new(n_topics = 60)
+doc_topic_distr <- tm_lda$fit_transform(wtm[[k_tw]]$dtm, n_iter = 20)
+tm_lda$plot()
 
 #==== PLOT DATA ====================================================================

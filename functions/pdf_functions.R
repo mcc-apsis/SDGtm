@@ -53,11 +53,12 @@ search_doi_in_text <- function(i_pdf) {
   print(paste(i_pdf))
   
   txt  <- pdftools::pdf_text(paste(i_pdf))
+  nb_pages <- pdf_info(i_pdf)$pages
   
   i_page <- 1
   flag_doi_found <- FALSE
   
-  while(!flag_doi_found & i_page <= 5) {
+  while(!flag_doi_found & i_page <= min(nb_pages, 5)) {
     
     txt_doi <- strsplit(txt,"\r\n")[[i_page]][grep("doi", strsplit(tolower(txt),"\r\n")[[1]])]
     
