@@ -37,6 +37,7 @@ v_path_xmls <- list.files(u_path_xml, full.names = TRUE)
 
 #==== PROCESS DATA =================================================================
 #---- Get pdf content and structure ------------------------------------------------
+#-- TODO: Join two lapply methods
 v_pdf_summary <- lapply(v_path_pdfs,
        function(x) {
          
@@ -95,6 +96,186 @@ v_pdf_summary <- lapply(v_path_pdfs,
          )
        }) %>% 
   do.call("rbind", .)
+
+v_pdf_years <- lapply(v_path_pdfs,
+                      function(x) {
+                        
+                        print(basename(x))
+
+                        # Initialise fields
+                        py  <- NA
+                        au  <- ""
+                        type <- "article"
+                        comment <- ""
+                                           
+                        # Find publication year     
+                        tmp <- regexpr(pattern = "([1-2][0,7,8,9][0-9][0-9])", text = basename(x))
+                        if (as.numeric(tmp) != -1) {
+                          py <- substr(basename(x), as.numeric(tmp), as.numeric(tmp)+3)
+                          au <- substr(basename(x), 1, as.numeric(tmp)-2)
+                        }
+                        
+                        # Find publication type
+                        tmp <- grep("manual|description|documentation", basename(x), value=T, ignore.case = TRUE)
+                        if (length(tmp) != 0) {
+                          type <- "model documentation"
+                        }
+                        if (basename(x) == "Meinshausen et al. 2011 Emulating coupled atmosphere-ocean and carbon cycle models with a simpler model, MAGICC6 – Part 1 Model description and calibration.pdf") type <- "article"
+                        
+                        # Manual adjustments
+                        if (basename(x) == "Berger et al-IJGEI-7.pdf")                               au <- "Berger et al"
+                        if (basename(x) == "Berger et al-IJGEI400103.pdf")                           au <- "Berger et al"
+                        if (basename(x) == "IFs Agricultural Model Documentation V25.03.pdf")        au <- "Rothman et al."
+                        if (basename(x) == "IFs Economic model Documentation v43 clean.pdf")         au <- "Hughes"
+                        if (basename(x) == "IFs Energy model Documentation_v9.pdf")                  au <- "Hughes et al."
+                        if (basename(x) == "IFs Health model Documentation v49.pdf")                 au <- "Hughes et al."
+                        if (basename(x) == "IFs Infrastructure model Documentation v12 - clean.pdf") au <- "Rothman and Irfan"
+                        if (basename(x) == "IFs Population_model Documentation_v10.pdf")             au <- "Hughes"
+                        
+                        if (basename(x) == "Berger et al-IJGEI-7.pdf")                               py <- 2017
+                        if (basename(x) == "Berger et al-IJGEI400103.pdf")                           py <- 2017
+                        if (basename(x) == "IFs Agricultural Model Documentation V25.03.pdf")        py <- 2017
+                        if (basename(x) == "IFs Economic model Documentation v43 clean.pdf")         py <- 2015
+                        if (basename(x) == "IFs Energy model Documentation_v9.pdf")                  py <- 2014
+                        if (basename(x) == "IFs Health model Documentation v49.pdf")                 py <- 2014
+                        if (basename(x) == "IFs Infrastructure model Documentation v12 - clean.pdf") py <- 2013
+                        if (basename(x) == "IFs Population_model Documentation_v10.pdf")             py <- 2014
+                        
+                        if (basename(x) == "Alkemade et al. 2011 Applying GLOBIO at different geographical levels.pdf") type    <- "book chapter"
+                        if (basename(x) == "Biemans 2012 Water constraints on future food production.pdf")              type    <- "thesis"
+                        if (basename(x) == "Bohl et al. 2016 Understanding and Forecasting Demographic Risk and Benefits.pdf") type  <- "report"
+                        if (basename(x) == "Bohl et al. 2017 Development Trends Report for South Africa.pdf")           type <- "report"
+                        if (basename(x) == "Bohl et al. 2017 Development Trends Report for Southern Africa.pdf") type <- "report"
+                        if (basename(x) == "Bosello et al. 2014 (documentation damage function WITCH model).pdf") type <- "working paper"
+                        if (basename(x) == "Bosetti et al. 2009 The 2008 WITCH Model New Model Features and Baseline.pdf") type <- "working paper"
+                        if (basename(x) == "Clarke et al 2007.pdf") type <- "report"
+                        if (basename(x) == "Cilliers 2013 Assessing Long-Term State Fragility in Africa Prospects for 26 ‘More Fragile’ Countries.pdf") type <- "report"
+                        if (basename(x) == "Cilliers 2011 African Futures 2050 The Next 40 Years.pdf") type <- "report"
+                        if (basename(x) == "Chateau 2011 Employment Impacts of Climate Change Mitigation Policies in OECD.pdf") type <- "working paper"
+                        if (basename(x) == "Cave et al. 2009 Trends in Connectivity Technologies and their Socioeconomic Impacts.pdf") type <- "report"
+                        if (basename(x) == "Cantore 2011 Future Paths of Poverty A Scenario Analysis with Integrated Assessment Models.pdf") type <- "working paper"
+                        if (basename(x) == "Burt et al. 2014 Eradicating poverty in fragile states prospects of reaching the high-hanging fruit by 2030.pdf") type <- "working paper"
+                        if (basename(x) == "Burrows 2016 Reducing the Risks from Rapid Demographic Change.pdf") type <- "report"
+                        if (basename(x) == "Goedkoop et al.  2014 ReCiPe 2008 (version 1.08)—report 1 characterisation.pdf") type <- "report"
+                        if (basename(x) == "Esbaugh et al. 2011 Taps and Toilets How Greater Access Can Radically Improve Africa’s Future.pdf") type <- "working paper"
+                        if (basename(x) == "Durand-Lasserve et al. 2015 Modelling of distributional impacts of energy subsidy reforms.pdf") type <- "working paper"
+                        if (basename(x) == "Dellink 2017 International trade consequences of climate change.pdf") type <- "working paper"
+                        if (basename(x) == "Dellink 2014 Consequences of Climate Change Damages for Economic Growth.pdf") type <- "working paper"
+                        if (basename(x) == "Dellink 2010 Costs, Revenues, and Effectiveness of the Copenhagen Accord Emission Pledges for 2020.pdf") type <- "working paper"
+                        if (basename(x) == "Hughes 2007 Forecasting Global Economic Growth with Endogenous Multifactor Productivity The International Futures (IFs) Approach.pdf") type <- "working paper"
+                        if (basename(x) == "Hughes 2006 UNEP GEO4 Driver Scenarios Using IFS with Pardee.pdf") type <- "working paper"
+                        if (basename(x) == "Hughes 2006 Assessing the Credibility of Forcasts using International Futures (IFs) Verification and Validation.pdf") type <- "working paper"
+                        if (basename(x) == "Hughes 2005 Scenario Analysis with International Futures") type <- "working paper"
+                        if (basename(x) == "Hughes 2004 The Base Case of International Futures (IFs) Comparison with Other Forecasts.pdf") type <- "working paper"
+                        if (basename(x) == "Hughes 2004 Forecasting the Human Development Index.pdf") type <- "working paper"
+                        if (basename(x) == "Hilderink et al. 2008 Towards a Global Integrated Sustainability Model GISMO1.0 status report.pdf") type <- "report, model documentation"
+                        if (basename(x) == "Hedden et al. 2016 Ending hunger in Africa The elimination of hunger and food insecurity on the African by 2025 Conditions for success.pdf") type <- "report"
+                        if (basename(x) == "Hedden et al. 2013 Fracking for Shale Gas in South Africa Blessing or Curse.pdf") type <- "working paper"
+                        if (basename(x) == "Havlík et al. 2015 Global climate change, food supply and livestock production systems A bioeconomic analysis.pdf") type <- "book chapter"
+                        if (basename(x) == "Havlik et al. 2015 Climate change impacts and mitigation in the developing world an integrated assessment of the agriculture and forestry sectors.pdf") type <- "working paper"
+                        if (basename(x) == "Hughes 2008 Assessing Strategies for Reducing Global Poverty.pdf") type <- "working paper"
+                        if (basename(x) == "Lanzi et al. 2013 Addressing Competitiveness and Carbon Leakage Impacts Arising from Multiple Carbon Markets.pdf") type <- "working paper"
+                        if (basename(x) == "Labat et al. 2015 GECO2015 Global Energy and Climate Outlook Road to Paris Assessment of Low Emission Levels under World Action Integrating National Contributions.pdf") type <- "report"
+                        if (basename(x) == "Kok et al. (2014) How sectors can contribute to sustainable use and conservation of biodiversity.pdf") type <- "report"
+                        if (basename(x) == "Kiesewetter et al. 2016 A Scalable Approach to Modelling Health Impacts of Air Pollution Based on Globally Available Data.pdf") type <- "abstract"
+                        if (basename(x) == "Irfan 2012 SADC Higher Education Futures 2050.pdf") type <- "report"
+                        if (basename(x) == "International Council for Science (2017).pdf") type <- "report"
+                        if (basename(x) == "International Commission on Financing Global Education Opportunity 2016 The Learning Generation Investing in Education for a Changing World.pdf") type <- "report"
+                        if (basename(x) == "IDDRI (2014) DDPP_report.pdf") type <- "report"
+                        if (basename(x) == "Hughes et al. 2011 Vulnerability to Interstate Conflict Evaluating Quantitative Measures.pdf") type <- "report"
+                        if (basename(x) == "Hughes et al. 2011 Projections of Global Health Outcomes from 2005 to 2060 Using the International Futures Integrated Forecasting Tool.pdf") type <- "working paper"
+                        if (basename(x) == "Hughes et al. 2011 Forecasting the Impacts of Environmental Constraints on Human Development.pdf") type <- "report"
+                        if (basename(x) == "Hughes 2013 Development-Oriented Policies and Alternative Human Development Paths Aggressive but Reasonable Interventions.pdf") type <- "report"
+                        if (basename(x) == "Hughes 2009 Economic Futures and Their Implications for Global Development The Unfolding of the Great Recession.pdf") type <- "working paper"
+                        if (basename(x) == "OECD 2012 OECD Environmental Outlook to 2050 consequences of inaction.pdf") type <- "report"
+                        if (basename(x) == "OECD 2016 Policy-Highlights-Economic-consequences-of-outdoor-air-pollution-web.pdf") type <- "report"
+                        if (basename(x) == "OECD 2015 The Economic Consequences of Climate Change.pdf") type <- "report"
+                        if (basename(x) == "OECD 2009 The Economics of Climate Change Mitigation Policies and Options for Global Action Beyond 2012_ES.pdf") type <- "report (executive summary only)"
+                        if (basename(x) == "OECD 2008 OECD Environmental Outlook to 2030.pdf") type <- "report"
+                        if (basename(x) == "Nelson et al. 2010 Food security, farming, and climate change to 2050, Scenarios, results, policy options.pdf") type <- "report"
+                        if (basename(x) == "Narayan 2016 Envisioning a Healthy Future Africa's Shifting Burden of Disease") type <- "working paper"
+                        if (basename(x) == "Moyer et al. 2015 Advancing development in Uganda evaluating policy choices for 2016-21 and selected impacts to 2040.pdf") type <- "working paper"
+                        if (basename(x) == "Moyer 2012 Cultivating the Future Exploring the Potential and Impact of a Green Revolution in Africa.pdf") type <- "working paper"
+                        if (basename(x) == "Messner 1995 User's guide for MESSAGE III.pdf") type <- "model documentation"
+                        if (basename(x) == "Marczak 2016 Latin America and the Caribbean 2030 Future Scenarios.pdf") type <- "report"
+                        if (basename(x) == "Shepherd et al. 2014 The Chronic Poverty Report 2014-2015 The Road to Zero Extreme Poverty.pdf") type <- "report"
+                        if (basename(x) == "Shepherd et al. 2013 The Geography of Poverty, Disasters and Climate Extremes in 2030.pdf") type <- "report"
+                        if (basename(x) == "Scott et al. 2017 Modeling Artificial Intelligence and Exploring its Impact.pdf") type <- "working paper"
+                        if (basename(x) == "Riahi et al. 2012 GEA-Summary-web.pdf") type <- "report (executive summary only)"
+                        if (basename(x) == "Riahi et al. 2012 GEA_Chapter17_pathways_lowres.pdf") type <- "book chapter"
+                        if (basename(x) == "PSI 2012 (MergeDescription).pdf") type <- "model documentation"
+                        if (basename(x) == "PSI 2014 (MergeCalibration).pdf") type <- "model documentation"
+                        if (basename(x) == "pbl-2012-roads-from-rio-pathways-to-achieve-global-sustainability-goals-by-2050.pdf") type <- "report"
+                        if (basename(x) == "PBL 2011 The protein puzzle the consumption and production of meat, dairy and fish in the European Union.pdf") type <- "report"
+                        if (basename(x) == "PBL 2010 Rethinking Global Biodiversity Strategies Exploring structural changes in production and consumption to reduce biodiversity loss.pdf") type <- "report"
+                        if (basename(x) == "PBL 2009 Beyond 2015 Long-term development and the Millennium Development Goals.pdf") type <- "report"
+                        if (basename(x) == "PBL (2017) People_and_the_Earth_WEB.pdf") type <- "report"
+                        if (basename(x) == "WMO_UNEP(2011).pdf") type <- "report"
+                        if (basename(x) == "Van Vuuren 2007 Energy systems and climate policy - Long-term scenarios for an uncertain future.pdf") type <- "report"
+
+                        # Comments
+                        if (basename(x) == "Alkemade et al. 2011 Applying GLOBIO at different geographical levels.pdf") comment <- "uncomplete"
+                        if (basename(x) == "Hayashi et al. 2014 Evaluation of Global Energy Crop Production Potential up to 2100 under Socioeconomic Development and Climate Change Scenarios.pdf") comment <- "japanese text"
+                        if (basename(x) == "Kiesewetter et al. 2016 A Scalable Approach to Modelling Health Impacts of Air Pollution Based on Globally Available Data.pdf") comment <- "uncomplete, abstract only"
+                        if (basename(x) == "Hughes et al. 2014 Opportunities and Challenges of a World with Negligible Senescence.pdf") comment <- "duplicated"
+                        if (basename(x) == "Hughes et al. 2011 Projections of Global Health Outcomes from 2005 to 2060 Using the International Futures Integrated Forecasting Tool.pdf") comment <- "japanese, french, arabic, russian text"
+                        if (basename(x) == "OECD 2009 The Economics of Climate Change Mitigation Policies and Options for Global Action Beyond 2012_ES.pdf") comment <- "uncomplete"
+                        if (basename(x) == "Riahi et al. 2012 GEA-Summary-web.pdf") comment <- "uncomplete"
+                        if (basename(x) == "Riahi et al. 2012 GEA_Chapter17_pathways_lowres.pdf") comment <- "uncomplete"
+                        if (basename(x) == "Zhou et al. 2017 An Analysis on Hypothetical Shocks Representing Cooling Water Shortage Using a Computable General Equilibrium Model.pdf") comment <- "research gate paper"
+                        if (basename(x) == "Yillia P (2015)") comment <- "german text"
+                        
+                        data.frame(
+                          author   = au,
+                          year     = py,
+                          type     = type,
+                          comment  = comment,
+                          filename = basename(x),
+                          path     = x
+                        )
+                      }) %>% 
+  do.call("rbind", .)
+
+v_pdf_summary <- inner_join(
+  v_pdf_years,
+  v_pdf_summary %>% 
+    select(title,doi,pages,path),
+  by=c("path")
+) %>% 
+  select(author, year, type, title, doi, pages, comment, filename, path) %>% 
+  mutate(year = as.numeric(paste(year)))
+
+v_pdf_summary <- v_pdf_summary %>% 
+  mutate(hasXML = ifelse(filename %in% substr(unique(basename(v_data_xml_df$doc)), 1, nchar(unique(basename(v_data_xml_df$doc)))-4), TRUE, FALSE))
+
+set.seed(123456)
+v_literature_sampleJan <- rbind(
+  v_pdf_summary %>% filter(hasXML == TRUE, type == "article") %>% sample_n(4),
+  v_pdf_summary %>% filter(hasXML == TRUE, type == "working paper") %>% sample_n(3),
+  v_pdf_summary %>% filter(hasXML == TRUE, type == "report") %>% sample_n(3))
+write.csv2(v_literature_sampleJan, file = "SDGTM_literature_sample_forJan.csv")
+v_data_xmlforJan1 <- v_data_xml_df %>% 
+  mutate(pdf_doc = substr(basename(doc), 1, nchar(basename(doc))-4)) %>% 
+  filter(pdf_doc %in% v_literature_sampleJan$filename)
+write.csv2(v_data_xmlforJan1, file = "SDGTM_xml_structure_forJan.csv")
+v_data_xmlforJan2 <- v_data_xml_df_1doc_per_doc %>% 
+  mutate(pdf_doc = substr(basename(doc), 1, nchar(basename(doc))-4)) %>% 
+  filter(pdf_doc %in% v_literature_sampleJan$filename)
+write.csv(v_data_xmlforJan2, file = "SDGTM_xml_collapsed_forJan.csv", quote = TRUE)
+set.seed(123)
+v_literature_sampleJerome <- rbind(
+  v_pdf_summary %>% filter(hasXML == TRUE, type == "article") %>% sample_n(4),
+  v_pdf_summary %>% filter(hasXML == TRUE, type == "working paper") %>% sample_n(3),
+  v_pdf_summary %>% filter(hasXML == TRUE, type == "report") %>% sample_n(3))
+write.csv2(v_literature_sampleJerome, file = "SDGTM_literature_sample_forJerome.csv")
+v_data_xmlforJerome1 <- v_data_xml_df %>% 
+  mutate(pdf_doc = substr(basename(doc), 1, nchar(basename(doc))-4)) %>% 
+  filter(pdf_doc %in% v_literature_sampleJerome$filename)
+write.csv2(v_data_xmlforJerome1, file = "SDGTM_xml_structure_forJerome.csv")
+v_data_xmlforJerome2 <- v_data_xml_df_1doc_per_doc %>% 
+  mutate(pdf_doc = substr(basename(doc), 1, nchar(basename(doc))-4)) %>% 
+  filter(pdf_doc %in% v_literature_sampleJerome$filename)
+write.csv2(v_data_xmlforJerome2, file = "SDGTM_xml_collapsed_forJerome.csv")
 
 v_data_xml <- read_xml(v_path_xmls[1])
 
