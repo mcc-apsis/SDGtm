@@ -1,0 +1,62 @@
+---
+title: "SDG TM documents sample"
+author: "Jerome Hilaire"
+date: "11 Dezember 2017"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+params:
+  doctype: ""
+  data: !r data.frame()
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+```
+
+```{r test, echo=FALSE, results = "asis"}
+
+if (params$doctype != "") cat(paste("# Doc type:", params$doctype, "\n\n"))
+
+if (length(params$data) != 0) {
+  v_data_xml_df <- params$data 
+} else {
+  load("data/processedData.RData")
+  docs <- unique(v_data_xml_df$doc)
+  v_data_xml_df <- v_data_xml_df %>% 
+    filter(doc %in% docs[1:3])
+}
+  
+docs <- unique(v_data_xml_df$doc)
+for (k in 1:length(docs)) {
+  #cat(paste("## Doc ", k, "\n"))
+  cat(paste("## ", basename(docs[k]), "\n\n"))
+  
+  sections <- v_data_xml_df$text[which(v_data_xml_df$role == "section-heading" & v_data_xml_df$doc == docs[k])]
+  
+  if (length(sections) == 0) {
+    cat(paste("\n !! No section could be found in this document !! \n\n"))
+    bodytext <- v_data_xml_df$text[which(v_data_xml_df$role == "body-text" & v_data_xml_df$doc == docs[k])]
+    for (bt in bodytext) {
+      cat(paste(bt, "\n"))
+    }
+    cat("\n\n")
+  } else {
+    for (s in sections) {
+    cat(paste("\n\n### ", s, "\n"))
+    bodytext <- v_data_xml_df$text[which(v_data_xml_df$role == "body-text" & v_data_xml_df$doc == docs[k] & v_data_xml_df$section == sections[s])]
+    for (bt in bodytext) {
+      cat(paste(bt, "\n"))
+    }
+    cat("\n\n")
+  }
+  cat("\n\n")
+  }
+  
+}
+
+
+```

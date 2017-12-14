@@ -1,6 +1,6 @@
 #==== USER SECTION =================================================================
-u_path_pdf <- "data/pdfs"
-u_path_xml <- "data/xml"
+u_path_pdf <- "data/pdfs_all"
+u_path_xml <- "data/xml_all"
 
 
 #==== INITIALISE ===================================================================
@@ -25,8 +25,10 @@ library(wordcloud)
 #library(NMF)
 library(LDAvis)
 library(xml2)
-
+#library(googlesheets)
 library(scimetrix)
+
+#googlesheets::gs_auth()
 
 # load functions
 source("functions/pdf_functions.R")
@@ -36,6 +38,11 @@ v_path_pdfs <- list.files(u_path_pdf, full.names = TRUE)
 v_path_xmls <- list.files(u_path_xml, full.names = TRUE)
 
 #==== PROCESS DATA =================================================================
+#---- Get doc info from google sheet -----------------------------------------------
+#gs <- gs_url("https://docs.google.com/spreadsheets/d/1sCPMV45U2q5E9eYm7-vJfp9TNKrGIhl34dhEEEMzkok/edit#gid=1473283493")
+#gs_docs <- googlesheets::gs_read(gs, "Only references")
+#save(gs_docs, file="data/gs_docs.RData")
+ 
 #---- Get pdf content and structure ------------------------------------------------
 #-- TODO: Join two lapply methods
 v_pdf_summary <- lapply(v_path_pdfs,
@@ -114,6 +121,11 @@ v_pdf_years <- lapply(v_path_pdfs,
                           py <- substr(basename(x), as.numeric(tmp), as.numeric(tmp)+3)
                           au <- substr(basename(x), 1, as.numeric(tmp)-2)
                         }
+                        
+                        au <- gsub(",", "",  au)
+                        au <- gsub("_", " ", au)
+                        
+                        if (!grepl("et al.", au, fixed = TRUE)) au <- gsub("et al", "et al.", au, fixed = TRUE)
                         
                         # Find publication type
                         tmp <- grep("manual|description|documentation", basename(x), value=T, ignore.case = TRUE)
@@ -248,35 +260,6 @@ v_pdf_summary <- inner_join(
 v_pdf_summary <- v_pdf_summary %>% 
   mutate(hasXML = ifelse(filename %in% substr(unique(basename(v_data_xml_df$doc)), 1, nchar(unique(basename(v_data_xml_df$doc)))-4), TRUE, FALSE))
 
-set.seed(123456)
-v_literature_sampleJan <- rbind(
-  v_pdf_summary %>% filter(hasXML == TRUE, type == "article") %>% sample_n(4),
-  v_pdf_summary %>% filter(hasXML == TRUE, type == "working paper") %>% sample_n(3),
-  v_pdf_summary %>% filter(hasXML == TRUE, type == "report") %>% sample_n(3))
-write.csv2(v_literature_sampleJan, file = "SDGTM_literature_sample_forJan.csv")
-v_data_xmlforJan1 <- v_data_xml_df %>% 
-  mutate(pdf_doc = substr(basename(doc), 1, nchar(basename(doc))-4)) %>% 
-  filter(pdf_doc %in% v_literature_sampleJan$filename)
-write.csv2(v_data_xmlforJan1, file = "SDGTM_xml_structure_forJan.csv")
-v_data_xmlforJan2 <- v_data_xml_df_1doc_per_doc %>% 
-  mutate(pdf_doc = substr(basename(doc), 1, nchar(basename(doc))-4)) %>% 
-  filter(pdf_doc %in% v_literature_sampleJan$filename)
-write.csv(v_data_xmlforJan2, file = "SDGTM_xml_collapsed_forJan.csv", quote = TRUE)
-set.seed(123)
-v_literature_sampleJerome <- rbind(
-  v_pdf_summary %>% filter(hasXML == TRUE, type == "article") %>% sample_n(4),
-  v_pdf_summary %>% filter(hasXML == TRUE, type == "working paper") %>% sample_n(3),
-  v_pdf_summary %>% filter(hasXML == TRUE, type == "report") %>% sample_n(3))
-write.csv2(v_literature_sampleJerome, file = "SDGTM_literature_sample_forJerome.csv")
-v_data_xmlforJerome1 <- v_data_xml_df %>% 
-  mutate(pdf_doc = substr(basename(doc), 1, nchar(basename(doc))-4)) %>% 
-  filter(pdf_doc %in% v_literature_sampleJerome$filename)
-write.csv2(v_data_xmlforJerome1, file = "SDGTM_xml_structure_forJerome.csv")
-v_data_xmlforJerome2 <- v_data_xml_df_1doc_per_doc %>% 
-  mutate(pdf_doc = substr(basename(doc), 1, nchar(basename(doc))-4)) %>% 
-  filter(pdf_doc %in% v_literature_sampleJerome$filename)
-write.csv2(v_data_xmlforJerome2, file = "SDGTM_xml_collapsed_forJerome.csv")
-
 v_data_xml <- read_xml(v_path_xmls[1])
 
 v_data_xml <- lapply(v_path_xmls,
@@ -312,14 +295,21 @@ v_data_xml <- lapply(v_path_xmls,
            return(tmp[[i_attr]])
          }
          
-         tmp <- xml_find_all(read_xml(x), "//page/paragraph[@role='section-heading' or 
-                                                  @role='unknown'         or 
-                                                  @role='body-text'       or 
-                                                  @role='figure-caption'  or 
-                                                  @role='figure'          or 
-                                                  @role='table-caption'   or 
-                                                  @role='table-caption']") 
+         xml <- x %>% 
+           readLines() %>% 
+           paste(collapse="") %>% 
+           enc2utf8() %>% 
+           iconv() %>% 
+           read_xml()
          
+         tmp <- xml_find_all(xml, "//page/paragraph[@role='section-heading' or 
+                                                    @role='unknown'         or 
+                                                    @role='body-text'       or 
+                                                    @role='figure-caption'  or 
+                                                    @role='figure'          or 
+                                                    @role='table-caption'   or 
+                                                    @role='table-caption']") 
+        
          if (length(tmp) != 0) {
            print("  > Processing file...")
            page <- xml_attr(tmp, "page")
@@ -445,8 +435,13 @@ v_data_xml <- lapply(v_path_xmls,
 v_data_xml_df <- v_data_xml %>% 
   do.call("rbind", .)
 
-save(v_pdf_summary, v_data_xml, v_data_xml_df, file = "data/processedData.RData")
+save(v_pdf_summary, v_data_xml, v_data_xml_df, file = "data/processedData_20171214.RData")
 
+pdf_notextract <- v_pdf_summary$filename[which(!v_pdf_summary$filename %in% substr(unique(basename(v_data_xml_df$doc)), 1, nchar(unique(basename(v_data_xml_df$doc)))-4))]
+cat("!! Warning !! Text in the following ", length(pdf_notextract)," pdfs could not be extracted at all:\n")
+for (k in pdf_notextract) {
+  cat(paste0("  - ", k, "\n"))
+}
 v_data_xml_df_1doc_per_doc <- v_data_xml_df %>%
   select(doc, role, text) %>%
   filter(role == "body-text") %>% 
@@ -475,7 +470,7 @@ corpus <- tm::Corpus(tm::VectorSource(v_data_xml_df_1doc_per_doc$text)) %>%
 #t <- iconv(t,to="utf-8-mac")
 
 # make a doc-term matrix and refresh the corpus to reflect any docs removed in the process
-dtm <- makeDTM(corpus,0.95,v_data_xml_df_1doc_per_doc$doc,0.01,0)
+dtm <- makeDTM(corpus,0.95,v_data_xml_df_1doc_per_doc$doc,0.001249,0)
 
 rem         <- filter(v_data_xml_df_1doc_per_doc, doc %in% dtm$removed)
 docs_used    <- subset(v_data_xml_df_1doc_per_doc, !(doc %in% dtm$removed))
@@ -484,21 +479,53 @@ corpus_used <- refresh_corp(dtm$dtm)
 # save data
 docs   <- docs_used
 corpus <- corpus_used
-save(docs,corpus,dtm,file="data/docs.RData")
+save(docs,corpus,dtm,file="data/docs_20171213.RData")
 
 rm(docs_used,corpus_used,rem)
 
 SEED <- 2016
 
+tm_sdg_20171213 <- list()
+
+for (knt in c(25,27,30,32,35)) {
+  print(paste0("Running LDA with ", knt, " topics..."))
+  system.time({
+    tm_sdg_20171213[[paste(knt)]] = LDA(dtm$dtm,k=knt, method="VEM",
+                    control=list(seed=SEED))
+  })
+  
+}
+
 system.time({
-  LDA_model = LDA(dtm$dtm,k=60, method="VEM",
-                   control=list(seed=SEED))
+  tm_sdg[[paste(25)]] = LDA(dtm$dtm,k=25, method="VEM",
+                             control=list(seed=SEED))
 })
+
+library("xlsx")
+write.xlsx()
+
+save(tm_sdg_20171213, file="data/lda_model_topics_25-35_20171213.RData")
+file.copy("topic_summary_template.Rmd", "topic_summary.Rmd", overwrite = T)
+
+rmarkdown::render("topic_summary.Rmd", params = list(
+  tms=tm_sdg
+))
+
+
+terms(LDA_model, 10) %>% as.data.frame() %>% write.csv2(file = "output/LDAmodel_60topics_crosssection.csv")
 
 # saves the results into the working dir
 save(LDA_model, file="data/lda_model_60topics.RData")
 terms(LDA_model, 3)
-terms(LDA_model, 10) %>% as.data.frame() %>% write.csv2(file = "output/LDAmodel_60topics_crosssection.csv")
+
+for (knt in c(25,27,30,32,35)) {
+  
+  print(paste0("Exporting top 10 terms for TM with ", knt, " topics..."))
+  
+  terms(tm_sdg_20171213[[paste(knt)]], 10) %>% 
+    as.data.frame() %>% 
+    write.csv2(file = paste0("output/LDAmodel_20171213_", knt,"topics_crosssection.csv"))
+}
 
 visualise(LDA_model, corpus, dtm$dtm, dir="output/LDA_model")
 
