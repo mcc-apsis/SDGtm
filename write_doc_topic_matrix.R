@@ -4,7 +4,7 @@ library(xlsx)
 map_names <- data.frame(xml2pdf=substr(basename(row.names(dtm$dtm)), 1, nchar(basename(row.names(dtm$dtm)))-4)) %>% 
   inner_join(v_pdf_years, by=c("xml2pdf"="filename")) %>% mutate(label=paste0(author, " (", year, ")"))
 
-dtt <- tm_sdg_20171213[["30"]]@gamma %>% 
+dtt <- tm_sdg_20171214[["30"]]@gamma %>% 
   as.data.frame()
 
 names(dtt) <- paste("Topic", 1:30)

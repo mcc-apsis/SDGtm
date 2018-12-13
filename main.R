@@ -45,6 +45,39 @@ v_path_xmls <- list.files(u_path_xml, full.names = TRUE)
  
 #---- Get pdf content and structure ------------------------------------------------
 #-- TODO: Join two lapply methods
+
+v_pdf_source <- lapply(v_path_pdfs,
+                        function(x) {
+                          
+                          #print(basename(x))
+                          
+                          # get pdf infos
+                          info <- pdf_info(x)
+                          
+                          so <- info$keys$Subject
+                          
+                          if (!is.null(so)) {
+                            if (grepl("doi", so)) so <- strsplit(so, ",", fixed=TRUE)[[1]][1]
+                            
+                          } else {
+                            metadata <- info$metadata %>% strsplit("\n")
+                            so <- grep("source", tolower(metadata), value=T)
+                            
+                            if (!is.null(so)) {
+                              text <- pdf_text(x)
+                              so <- strsplit(text[3], "\r")[[1]][1]
+                              
+                              #if (!is.null(so)) print("  > Could not extract source.")
+                            } else {
+                              #print("  > Could not extract source.")
+                            }
+                          }
+                          #print(paste("  > Source is: ", so))
+                          
+                          so
+                          
+                        })
+
 v_pdf_summary <- lapply(v_path_pdfs,
        function(x) {
          
@@ -71,11 +104,15 @@ v_pdf_summary <- lapply(v_path_pdfs,
          }
          
          # get doi
-         doi   <- ifelse(is.null(info$keys$doi), "", info$keys$doi)
+         doi <- ifelse(is.null(info$keys$doi), "", info$keys$doi)
          
          if (doi == "" & pages <= 40) {
-           doi <- search_doi_in_text(x)
+           tryCatch(
+             doi <- search_doi_in_text(x),
+             error = function(e) {print(paste("Warning!! >>", e))}
+           )
          }
+         
          if (doi == "" & pages <= 40) {
            doi <- get_prism_doi(x)
          }
@@ -92,11 +129,31 @@ v_pdf_summary <- lapply(v_path_pdfs,
            doi <- trimws(strsplit(trimws(substr(doi, as.numeric(regexpr("doi", tolower(doi)))+3, nchar(doi))), " ", fixed=T)[[1]][1])
          }
          
+         so <- info$keys$Subject
+         
+         if (!is.null(so)) {
+           if (grepl("doi", so)) so <- strsplit(so, ",", fixed=TRUE)[[1]][1]
+           
+         } else {
+           metadata <- info$metadata %>% strsplit("\n")
+           so <- grep("source", tolower(metadata), value=T)
+           
+           if (!is.null(so)) {
+             text <- pdf_text(x)
+             so <- strsplit(text[2], "\r")[[1]][1]
+             
+             #if (!is.null(so)) print("  > Could not extract source.")
+           } else {
+             #print("  > Could not extract source.")
+           }
+         }
+         
          data.frame(
            author   = au,
            year     = py,
            title    = title,
            doi      = doi,
+           so       = so,
            pages    = pages,
            filename = basename(x),
            path     = x
@@ -248,16 +305,16 @@ v_pdf_years <- lapply(v_path_pdfs,
                       }) %>% 
   do.call("rbind", .)
 
-v_pdf_summary <- inner_join(
+v_pdf_summary_wYears <- inner_join(
   v_pdf_years,
   v_pdf_summary %>% 
-    select(title,doi,pages,path),
+    select(title,doi,so,pages,path),
   by=c("path")
 ) %>% 
-  select(author, year, type, title, doi, pages, comment, filename, path) %>% 
+  select(author, year, type, title, doi, so, pages, comment, filename, path) %>% 
   mutate(year = as.numeric(paste(year)))
 
-v_pdf_summary <- v_pdf_summary %>% 
+v_pdf_summary_wYears <- v_pdf_summary_wYears %>% 
   mutate(hasXML = ifelse(filename %in% substr(unique(basename(v_data_xml_df$doc)), 1, nchar(unique(basename(v_data_xml_df$doc)))-4), TRUE, FALSE))
 
 v_data_xml <- read_xml(v_path_xmls[1])
@@ -302,13 +359,16 @@ v_data_xml <- lapply(v_path_xmls,
            iconv() %>% 
            read_xml()
          
-         tmp <- xml_find_all(xml, "//page/paragraph[@role='section-heading' or 
-                                                    @role='unknown'         or 
-                                                    @role='body-text'       or 
-                                                    @role='figure-caption'  or 
-                                                    @role='figure'          or 
-                                                    @role='table-caption'   or 
-                                                    @role='table-caption']") 
+         tmp <- xml_find_all(xml, "//page/paragraph[@role='section-heading'   or 
+                                                    @role='unknown'           or 
+                                                    @role='body-text'         or 
+                                                    @role='figure-caption'    or 
+                                                    @role='figure'            or 
+                                                    @role='table-caption'     or 
+                                                    @role='title'             or
+                                                    @role='reference-heading' or
+                                                    @role='formula'           
+                                                   ]") 
         
          if (length(tmp) != 0) {
            print("  > Processing file...")
@@ -352,6 +412,8 @@ v_data_xml <- lapply(v_path_xmls,
              stringsAsFactors = FALSE
            )
            
+           #-- Infering text properties -------
+           
            # Infer most common font, font-size and colour used for section headers
            print("  > Infer most common font for section headers")
            section_header_mcfont     <- get_mcatt_sectionheader(df, "mcfo", 2)
@@ -367,16 +429,21 @@ v_data_xml <- lapply(v_path_xmls,
            # Infer pdf content and structure (section headers and body text) by filtering out rows that do not match those common properties
            print("  > Infer pdf structure and content")
            df <- rbind(
+             # section-heading
              df %>% 
                filter(grepl("^[1-9]{1}(\\.{1}[1-9]{1}){,2}\\s{1}(\\w){1,}", text) & (maxy-miny) <= 20) %>% 
                filter(mcfo %in% section_header_mcfont, mcfs %in% section_header_mcfontsize, mcco %in% section_header_mccolour) %>% 
                mutate(role="section-heading"),
+             # body-text
              df %>% 
                filter(!grepl("^[1-9]{1}(\\.{1}[1-9]{1}){,2}\\s{1}(\\w){1,}", text) & (maxy-miny) > 20) %>% 
                filter(mcfo == body_text_mcfont, mcfs == body_text_mcfontsize, mcco == body_text_mccolour) %>% 
                mutate(role = "body-text")) %>% 
              arrange(id) %>% 
+             # abstract
              mutate(role=ifelse(grepl("^abstract.*", tolower(text)), "abstract", role))
+           
+           #-- Sections allocation -------
            
            # Allocate sections to rows #1
            print("  > Allocate sections #1")
@@ -481,6 +548,7 @@ docs   <- docs_used
 corpus <- corpus_used
 save(docs,corpus,dtm,file="data/docs_20171213.RData")
 
+load("data/docs_20171213.RData")
 rm(docs_used,corpus_used,rem)
 
 SEED <- 2016
